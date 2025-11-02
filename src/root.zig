@@ -2,6 +2,8 @@ const std = @import("std");
 const Build = std.Build;
 const testing = std.testing;
 
+pub const Command = @import("Command");
+
 const Options = struct {
     name: []const u8,
     exe_file: Build.LazyPath,
@@ -26,9 +28,12 @@ pub fn add(b: *Build, options: Options) *Build.Step.Run {
         .dest_sub_path = dest_sub_path,
     });
 
-    // Create runtime module
-    const dir = b.path(@src().file).dirname();
-    const runtime_path = dir.join(b.allocator, "Command.zig") catch @panic("OOM");
+    // Create runtime module.
+    // we use `@src().file` because this `add` function runs in two scenarios:
+    //  - when exetest is used as a dependency
+    //  - when exetest is built on its own
+    // This prevents files from the user's project being used as the runtime path.
+    const runtime_path = b.path(@src().file);
     const runtime_mod = b.createModule(.{
         .root_source_file = runtime_path,
         .target = b.graph.host,
