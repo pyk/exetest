@@ -1,0 +1,7 @@
+[env]
+MISE_INSTALLS_DIR = "{{config_root}}/.mise/installs"
+_.path = ["./zig-out/bin"]
+
+[tools]
+zig = "0.15.2"
+zls = "0.15.0"
