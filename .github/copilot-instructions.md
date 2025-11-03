@@ -10,7 +10,7 @@
 
 - `build.zig`: Build script.
 - `src/root.zig`: Main module, expose `add` and `run` function.
-- `src/test_exe.zig`: Source code of binary to test the `add` function.
+- `src/test_exe.zig`: Source code of binary to test the `run` function.
 - `src/test.zig`: Integration tests, mainly used to test `run` function.
 
 ---
