@@ -64,12 +64,12 @@ pub const RunResult = struct {
 };
 
 pub fn run(exe_name: []const u8, options: RunOptions) RunResult {
-    // Import generated module from build
-    // const gen_mod = @import("exetest_gen");
-
     // Create child process
-    const argv = &[_][]const u8{ exe_name, options.args orelse "" };
-    var child = std.process.Child.init(argv, options.allocator);
+    // Build argv with only the executable name when args is null, otherwise include the provided arg.
+    var single_argv: [1][]const u8 = .{exe_name};
+    var double_argv: [2][]const u8 = .{ exe_name, options.args orelse "" };
+    const argv_ptr: [][]const u8 = if (options.args) |_| double_argv[0..2] else single_argv[0..1];
+    var child = std.process.Child.init(argv_ptr, options.allocator);
     child.stdin_behavior = if (options.stdin) |_| .Pipe else .Ignore;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
@@ -78,10 +78,6 @@ pub fn run(exe_name: []const u8, options: RunOptions) RunResult {
     var env_map = std.process.getEnvMap(options.allocator) catch @panic("OOM");
     defer env_map.deinit();
     const path = env_map.get("PATH") orelse "(PATH empty)";
-
-    // var child_env_map = std.process.EnvMap.init(options.allocator);
-    // child_env_map.put("PATH", gen_mod.path) catch @panic("fails to set PATH");
-    // child.env_map = &child_env_map;
 
     // Spawn the child process and provide more context on failures
     child.spawn() catch |err| std.debug.panic(
