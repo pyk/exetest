@@ -45,8 +45,9 @@ library. Use it to maintain consistency when writing Zig code.
   pub fn openFile(self: Dir, sub_path: []const u8, ...) !File;
   pub fn getEndPos(self: File) !u64;
   ```
-- **Variables, Parameters & Fields**: `snake_case` Applies to local variables,
-  function parameters, and fields within structs/unions.
+- **Variables, Parameters & Fields**: `snake_case` Always prefer `const` over
+  `var`. Applies to local variables, function parameters, and fields within
+  structs/unions.
 
   ```zig
   // Function parameter & local variable
