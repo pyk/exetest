@@ -24,11 +24,23 @@ pub fn build(b: *std.Build) !void {
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
+    // Test executables
+    const test_exe = b.addExecutable(.{
+        .name = "exetest",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/test_exe.zig"),
+            .target = b.graph.host,
+        }),
+    });
+    b.installArtifact(test_exe);
+
+    // NOTE: End user will use b.addDependency
     const exetest = @import("src/root.zig");
+
     const run_integration_tests = exetest.add(b, .{
         .name = "integration",
-        .exe_file = b.path("src/main.zig"),
-        .test_file = b.path("src/integration_test.zig"),
+        .test_file = b.path("src/test.zig"),
+        .exetest_mod = mod,
     });
 
     const test_step = b.step("test", "Run tests");

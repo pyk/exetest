@@ -2,43 +2,13 @@ const std = @import("std");
 const Build = std.Build;
 const testing = std.testing;
 
-pub const Command = @import("Command");
-
 const Options = struct {
     name: []const u8,
-    exe_file: Build.LazyPath,
     test_file: Build.LazyPath,
+    exetest_mod: *Build.Module,
 };
 
 pub fn add(b: *Build, options: Options) *Build.Step.Run {
-    // Create target executable
-    const exe = b.addExecutable(.{
-        .name = options.name,
-        .root_module = b.createModule(.{
-            .root_source_file = options.exe_file,
-            .target = b.graph.host,
-        }),
-    });
-
-    const dest_sub_path = std.fs.path.join(
-        b.allocator,
-        &.{ "exetest", exe.name },
-    ) catch @panic("OOM");
-    const install_exe = b.addInstallArtifact(exe, .{
-        .dest_sub_path = dest_sub_path,
-    });
-
-    // Create runtime module.
-    // we use `@src().file` because this `add` function runs in two scenarios:
-    //  - when exetest is used as a dependency
-    //  - when exetest is built on its own
-    // This prevents files from the user's project being used as the runtime path.
-    const runtime_path = b.path(@src().file);
-    const runtime_mod = b.createModule(.{
-        .root_source_file = runtime_path,
-        .target = b.graph.host,
-    });
-
     // Create the test module that imports the runtime module
     const test_mod = b.createModule(.{
         .root_source_file = options.test_file,
@@ -46,7 +16,7 @@ pub fn add(b: *Build, options: Options) *Build.Step.Run {
         .imports = &.{
             .{
                 .name = "exetest",
-                .module = runtime_mod,
+                .module = options.exetest_mod,
             },
         },
     });
@@ -58,16 +28,126 @@ pub fn add(b: *Build, options: Options) *Build.Step.Run {
     });
     const run_test_exe = b.addRunArtifact(test_exe);
 
-    run_test_exe.step.dependOn(&install_exe.step);
+    // IMPORTANT: Make sure all exe are installed first
+    run_test_exe.step.dependOn(b.getInstallStep());
 
-    const runtime_mod_options = b.addOptions();
-    const exe_path = b.getInstallPath(install_exe.dest_dir.?, install_exe.dest_sub_path);
-    const exe_dir = std.fs.path.dirname(exe_path) orelse exe_path;
+    const original_path = b.graph.env_map.get("PATH") orelse "";
+    const path = b.fmt("{s}{c}{s}", .{
+        b.exe_dir,
+        std.fs.path.delimiter,
+        original_path,
+    });
 
-    // Provide the installation directory only. the runtime can append the
-    // executable name to construct the full path.
-    runtime_mod_options.addOption([]const u8, "exe_dir", exe_dir);
-    runtime_mod.addOptions("exetest_gen", runtime_mod_options);
+    run_test_exe.setEnvironmentVariable("PATH", path);
 
     return run_test_exe;
+}
+
+pub const RunOptions = struct {
+    allocator: std.mem.Allocator = testing.allocator,
+    args: ?[]const u8 = null,
+    stdin: ?[]const u8 = null,
+    max_output_bytes: usize = 50 * 1024,
+};
+
+pub const RunResult = struct {
+    code: u8,
+    term: std.process.Child.Term,
+    stdout: std.ArrayList(u8),
+    stderr: std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+
+    pub fn deinit(self: *RunResult) void {
+        self.stdout.deinit(self.allocator);
+        self.stderr.deinit(self.allocator);
+    }
+};
+
+pub fn run(exe_name: []const u8, options: RunOptions) RunResult {
+    // Import generated module from build
+    // const gen_mod = @import("exetest_gen");
+
+    // Create child process
+    const argv = &[_][]const u8{ exe_name, options.args orelse "" };
+    var child = std.process.Child.init(argv, options.allocator);
+    child.stdin_behavior = if (options.stdin) |_| .Pipe else .Ignore;
+    child.stdout_behavior = .Pipe;
+    child.stderr_behavior = .Pipe;
+
+    // Set PATH
+    var env_map = std.process.getEnvMap(options.allocator) catch @panic("OOM");
+    defer env_map.deinit();
+    const path = env_map.get("PATH") orelse "(PATH empty)";
+
+    // var child_env_map = std.process.EnvMap.init(options.allocator);
+    // child_env_map.put("PATH", gen_mod.path) catch @panic("fails to set PATH");
+    // child.env_map = &child_env_map;
+
+    // Spawn the child process and provide more context on failures
+    child.spawn() catch |err| std.debug.panic(
+        \\failed to spawn executable '{s}' with args '{s}': {any}
+        \\PATH: {s}
+        \\Hint: ensure the executable is present in PATH or the provided name is correct.
+    ,
+        .{
+            exe_name,
+            (options.args orelse ""),
+            err,
+            path,
+        },
+    );
+
+    // Ensure we attempt to kill the child if this function unwinds
+    errdefer {
+        _ = child.kill() catch |err| std.debug.panic(
+            \\failed to kill child process for executable '{s}': {any}
+            \\PATH: {s}
+        , .{ exe_name, err, path });
+    }
+
+    // Prepare buffers to collect stdout and stderr
+    var stdout_buffer: std.ArrayList(u8) = .empty;
+    var stderr_buffer: std.ArrayList(u8) = .empty;
+
+    child.collectOutput(
+        options.allocator,
+        &stdout_buffer,
+        &stderr_buffer,
+        options.max_output_bytes,
+    ) catch |err| std.debug.panic(
+        \\failed collecting output from executable '{s}' (args='{s}'): {any}
+        \\Stdout length: {d}
+        \\Stderr length: {d}
+        \\PATH: {s}
+        \\Hint: increase max_output_bytes if output was truncated or inspect the program for excessive output.
+    ,
+        .{
+            exe_name,
+            (options.args orelse ""),
+            err,
+            stdout_buffer.items.len,
+            stderr_buffer.items.len,
+            path,
+        },
+    );
+
+    // Wait for child termination and include the termination reason in the panic message.
+    const term = child.wait() catch |err| std.debug.panic(
+        \\failed waiting for executable '{s}' to terminate (args='{s}'): {any}
+        \\PATH: {s}
+        \\Hint: the process may have failed to start or the system ran out of resources
+    , .{
+        exe_name,
+        (options.args orelse ""),
+        err,
+        path,
+    });
+
+    return RunResult{
+        .code = if (term == .Exited) term.Exited else 0,
+        .term = term,
+        .stdout = stdout_buffer,
+        .stderr = stderr_buffer,
+        .allocator = options.allocator,
+    };
 }
