@@ -68,3 +68,28 @@ test "run: stdout/stderr capture" {
     try testing.expectEqual(@as(u8, 0), result.code);
     try testing.expect(result.term == .Exited);
 }
+
+test "run: stdin truncation" {
+    const argv = &[_][]const u8{"cat"};
+
+    // create a payload of 4 KiB of 'A'
+    const total: usize = 4 * 1024;
+    var sbuf: [4096]u8 = undefined;
+    var i: usize = 0;
+    while (i < total) : (i += 1) sbuf[i] = 'A';
+    const payload = sbuf[0..total];
+
+    const limit: usize = 1024; // 1 KiB
+    var result = try exetest.run(.{
+        .argv = argv,
+        .stdin = payload,
+        .max_stdin_bytes = limit,
+    });
+    defer result.deinit();
+
+    // Expect the `cat` to echo only the first `limit` bytes
+    try testing.expectEqualStrings(@as([]const u8, payload[0..limit]), result.stdout);
+    try testing.expectEqual(@as(u8, 0), result.code);
+    try testing.expect(result.term == .Exited);
+    try testing.expectEqualStrings("", result.stderr);
+}
