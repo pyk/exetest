@@ -1,6 +1,6 @@
 .{
     .name = .exetest,
-    .version = "0.0.1",
+    .version = "0.1.0",
     .fingerprint = 0xb7a6abd59d7fa03,
     .minimum_zig_version = "0.15.2",
     .paths = .{
