@@ -5,3 +5,4 @@ _.path = ["./zig-out/bin"]
 [tools]
 zig = "0.15.2"
 zls = "0.15.0"
+"github:BurntSushi/ripgrep" = "15.1.0"
