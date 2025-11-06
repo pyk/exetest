@@ -9,7 +9,8 @@
 # Structure
 
 - `build.zig`: Build script.
-- `src/root.zig`: Main module, expose `add` and `run` function.
+- `src/root.zig`: Main module, expose `add`, `run`, `cmd` and `argv` functions.
+  All unit tests for the `cmd` and `argv` is in this file.
 - `src/test_exe.zig`: Source code of binary to test the `run` function.
 - `src/test.zig`: Integration tests, mainly used to test `run` function.
 
@@ -17,13 +18,21 @@
 
 # Design
 
-`exetest` is designed to be very simple, it only expose 2 functions:
+`exetest` is designed to be very simple, it only expose 2 core functions and 2
+helper functions:
+
+Core functions:
 
 1. `add`: This function is used in the user's `build.zig`. This is used to
    register test file and test runner.
 2. `run`: This function is used in the user's tests. It allows user to test any
    binary installed on their system, including all installed executables in
    their `build.zig` script.
+
+Helper functions:
+
+1. `argv`: This function used to convert tuple literal to `[]const []const u8`.
+2. `cmd`: This function used to convert string literal to `[]const []const u8`.
 
 Expected user's flow:
 
@@ -41,17 +50,10 @@ Expected user's flow:
     const exetest = @import("exetest");
 
     pub fn build(b: *std.Build) !void {
-      // Add dependency
-      const exetest_dep = b.dependency("exetest", .{
-          .target = target,
-      });
-      const exetest_mod = exetest_dep.module("exetest");
-
       // Add test
       const run_test = exetest.add(b, .{
           .name = "integration",
           .test_file = b.path("src/test.zig"),
-          .exetest_mod = exetest_mod,
       });
 
       const test_step = b.step("test", "Run tests");
@@ -62,12 +64,13 @@ Expected user's flow:
 3. User write their test file. For example: `src/test.zig`:
 
    ```zig
-    const exetest = @import("exetest");
-    const testing = @import("std").testing;
     const std = @import("std");
+    const testing = std.testing;
+    const exetest = @import("exetest");
 
     test "ls" {
-        var result = exetest.run("ls", .{});
+        const argv = exetest.cmd("ls --help");
+        var result = exetest.run(.{ .argv = argv });
         defer result.deinit();
         try testing.expectEqual(@as(u8, 0), result.code);
     }
@@ -85,8 +88,7 @@ tools against this path.
 
 - `zig build test --summary all` to run the test.
 - `zig build` to run build.
-- Consider running `zig build test --summary all` after edits to validate
-  changes.
+- Always run the test after edits to validate changes.
 
 When implementing features involving the standard library:
 
@@ -191,7 +193,31 @@ library. Use it to maintain consistency when writing Zig code.
 
 - **Type Aliases**: Use `PascalCase` for type aliases, consistent with other
   type naming.
+
   ```zig
   pub const Handle = posix.fd_t;
   pub const Mode = posix.mode_t;
+  ```
+
+- **Doc comments**: All exported members and all struct fields must have doc
+  comments. Doc comments should be short and technical. Use simple words and
+  expand any missing technical detail. Do not use em dashes or semicolons.
+  Examples below show the allowed style.
+
+  ```zig
+  // Good: technical and short
+  /// File is a wrapper for an open file descriptor
+  pub const File = struct {
+      /// The underlying file descriptor
+      fd: posix.fd_t,
+  };
+
+  // Expand missing detail when needed
+  /// Reads up to `len` bytes from the file into `buf`
+  /// Returns the number of bytes read or an error
+  pub fn read(self: *File, buf: []u8) !usize;
+
+  // Avoid complex words and punctuation like em dash and semicolon
+  /// Open a file for reading
+  pub fn open(path: []const u8) !File;
   ```
