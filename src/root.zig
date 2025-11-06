@@ -61,6 +61,9 @@ pub const RunOptions = struct {
     /// Optional working directory for the child process. When null the
     /// child inherits the parent's current working directory.
     cwd: ?[]const u8 = null,
+    /// Optional environment map to use for the child process. When null the
+    /// child's environment will inherit from the parent process.
+    env_map: ?*const std.process.EnvMap = null,
     /// Maximum number of bytes to capture from stdout/stderr.
     max_output_bytes: usize = 50 * 1024,
     /// Maximum number of bytes to write into the child's stdin. If the
@@ -96,6 +99,7 @@ pub fn run(options: RunOptions) !RunResult {
     // Create child process
     var child = Child.init(options.argv, options.allocator);
     child.cwd = options.cwd;
+    child.env_map = options.env_map;
     child.stdin_behavior = if (options.stdin) |_| .Pipe else .Ignore;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;

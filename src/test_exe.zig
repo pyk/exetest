@@ -20,6 +20,7 @@ pub fn main() !void {
     var exit_requested: ?u8 = null;
     var abort_requested = false;
     var print_cwd = false;
+    var getenv_name: ?[]const u8 = null;
     while (i < args.len) : (i += 1) {
         const s = args[i];
         if (std.mem.eql(u8, s, "--stderr")) {
@@ -32,6 +33,15 @@ pub fn main() !void {
         }
         if (std.mem.eql(u8, s, "--print-cwd")) {
             print_cwd = true;
+            continue;
+        }
+        if (std.mem.eql(u8, s, "--getenv")) {
+            if (i + 1 >= args.len) {
+                std.debug.print("missing getenv name\n", .{});
+                std.process.exit(1);
+            }
+            getenv_name = args[i + 1];
+            i += 1;
             continue;
         }
         if (std.mem.eql(u8, s, "--exit")) {
@@ -59,7 +69,14 @@ pub fn main() !void {
     var writer = if (use_stderr) std.fs.File.stderr().writer(&buf) else std.fs.File.stdout().writer(&buf);
     const io = &writer.interface;
 
-    if (print_cwd) {
+    if (getenv_name) |name| {
+        var env_map = std.process.getEnvMap(allocator) catch @panic("fails to get map");
+        defer env_map.deinit();
+        if (env_map.get(name)) |v| {
+            try io.writeAll(v);
+        }
+        try io.writeAll("\n");
+    } else if (print_cwd) {
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);
         try io.writeAll(cwd);

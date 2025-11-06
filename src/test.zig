@@ -156,3 +156,20 @@ test "run: with cwd" {
     try testing.expectEqual(@as(u8, 0), result.code);
     try testing.expect(result.term == .Exited);
 }
+
+test "run: with env_map" {
+    // Build an EnvMap and insert a test variable.
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+
+    try env.put("EXETEST_VAR", "hello-env");
+
+    const argv = &[_][]const u8{ "exetest", "--getenv", "EXETEST_VAR" };
+    var result = try exetest.run(.{
+        .argv = argv,
+        .env_map = &env,
+    });
+    defer result.deinit();
+
+    try testing.expectEqualStrings("hello-env\n", result.stdout);
+}
