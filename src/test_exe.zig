@@ -19,6 +19,7 @@ pub fn main() !void {
     var i: usize = 1;
     var exit_requested: ?u8 = null;
     var abort_requested = false;
+    var print_cwd = false;
     while (i < args.len) : (i += 1) {
         const s = args[i];
         if (std.mem.eql(u8, s, "--stderr")) {
@@ -27,6 +28,10 @@ pub fn main() !void {
         }
         if (std.mem.eql(u8, s, "--abort")) {
             abort_requested = true;
+            continue;
+        }
+        if (std.mem.eql(u8, s, "--print-cwd")) {
+            print_cwd = true;
             continue;
         }
         if (std.mem.eql(u8, s, "--exit")) {
@@ -54,7 +59,12 @@ pub fn main() !void {
     var writer = if (use_stderr) std.fs.File.stderr().writer(&buf) else std.fs.File.stdout().writer(&buf);
     const io = &writer.interface;
 
-    if (pos.len == 0) {
+    if (print_cwd) {
+        const cwd = try std.process.getCwdAlloc(allocator);
+        defer allocator.free(cwd);
+        try io.writeAll(cwd);
+        try io.writeAll("\n");
+    } else if (pos.len == 0) {
         try io.writeAll("OK\n");
     } else {
         var j: usize = 0;

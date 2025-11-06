@@ -58,6 +58,9 @@ pub const RunOptions = struct {
     argv: []const []const u8,
     allocator: std.mem.Allocator = testing.allocator,
     stdin: ?[]const u8 = null,
+    /// Optional working directory for the child process. When null the
+    /// child inherits the parent's current working directory.
+    cwd: ?[]const u8 = null,
     /// Maximum number of bytes to capture from stdout/stderr.
     max_output_bytes: usize = 50 * 1024,
     /// Maximum number of bytes to write into the child's stdin. If the
@@ -92,6 +95,7 @@ pub const RunResult = struct {
 pub fn run(options: RunOptions) !RunResult {
     // Create child process
     var child = Child.init(options.argv, options.allocator);
+    child.cwd = options.cwd;
     child.stdin_behavior = if (options.stdin) |_| .Pipe else .Ignore;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;

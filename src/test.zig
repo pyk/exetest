@@ -131,3 +131,28 @@ test "run: executable not found" {
         try testing.expect(true);
     }
 }
+
+test "run: with cwd" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(testing.allocator, ".");
+    defer testing.allocator.free(tmp_path);
+
+    const cwd = try std.process.getCwdAlloc(testing.allocator);
+    defer testing.allocator.free(cwd);
+
+    const argv = &[_][]const u8{ "exetest", "--print-cwd" };
+    var result = try exetest.run(.{
+        .argv = argv,
+        .cwd = tmp_path,
+    });
+    defer result.deinit();
+
+    // Expect the child to print its current working directory matching expected_dir
+    const expected_with_nl = try std.fmt.allocPrint(testing.allocator, "{s}\n", .{tmp_path});
+    defer testing.allocator.free(expected_with_nl);
+
+    try testing.expectEqualStrings(expected_with_nl, result.stdout);
+    try testing.expectEqual(@as(u8, 0), result.code);
+    try testing.expect(result.term == .Exited);
+}
