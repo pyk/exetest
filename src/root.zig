@@ -9,11 +9,18 @@ pub const AddOptions = struct {
     /// Path to the test source file
     test_file: Build.LazyPath,
     /// The `exetest` build module to import into the test
-    exetest_mod: *Build.Module,
+    exetest_mod: ?*Build.Module,
 };
 
 /// Register new test
 pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
+    const exetest_mod = if (options.exetest_mod) |mod|
+        mod
+    else
+        b.dependency("exetest", .{
+            .target = b.graph.host,
+        }).module("exetest");
+
     // Create the test module that imports the runtime module
     const test_mod = b.createModule(.{
         .root_source_file = options.test_file,
@@ -21,7 +28,7 @@ pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
         .imports = &.{
             .{
                 .name = "exetest",
-                .module = options.exetest_mod,
+                .module = exetest_mod,
             },
         },
     });
