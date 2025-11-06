@@ -58,7 +58,11 @@ pub const RunOptions = struct {
     argv: []const []const u8,
     allocator: std.mem.Allocator = testing.allocator,
     stdin: ?[]const u8 = null,
+    /// Maximum number of bytes to capture from stdout/stderr.
     max_output_bytes: usize = 50 * 1024,
+    /// Maximum number of bytes to write into the child's stdin. If the
+    /// provided `stdin` slice is larger, it will be truncated to this size.
+    max_stdin_bytes: usize = 64 * 1024,
 };
 
 /// Result returned by `run` with exit info and captured output.
@@ -97,6 +101,33 @@ pub fn run(options: RunOptions) !RunResult {
     // Ensure we attempt to kill the child if this function unwinds
     errdefer {
         _ = child.kill() catch {};
+    }
+
+    // If stdin content was provided, write it to the child's stdin pipe and
+    // close the pipe so the child sees EOF.
+    if (options.stdin) |stdin_bytes| {
+        if (child.stdin) |stdin_file| {
+            // Determine how many bytes we will actually write (truncate if needed)
+            const write_len = if (@as(usize, stdin_bytes.len) < options.max_stdin_bytes)
+                @as(usize, stdin_bytes.len)
+            else
+                options.max_stdin_bytes;
+
+            // Use a small stack buffer for the File.writer
+            var buf: [1024]u8 = undefined;
+            var writer = stdin_file.writer(&buf);
+            const io = &writer.interface;
+
+            // writeAll may return errors from low-level I/O; only write up to write_len
+            try io.writeAll(stdin_bytes[0..write_len]);
+            // flush to ensure data is sent
+            try io.flush();
+
+            // Close the writing end to signal EOF to the child
+            stdin_file.close();
+            // Mark as closed to avoid double-close in Child.cleanupStreams
+            child.stdin = null;
+        }
     }
 
     // Prepare buffers to collect stdout and stderr
