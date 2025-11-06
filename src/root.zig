@@ -55,20 +55,40 @@ pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
 
 /// Options for `run` controlling I/O, allocator and output limits.
 pub const RunOptions = struct {
+    /// Argument vector passed to the child process. The first element
+    /// should be the program name / path as conventionally provided to
+    /// exec-style APIs.
     argv: []const []const u8,
+
+    /// Allocator used for any allocations performed by `run` and for
+    /// capturing stdout/stderr. Defaults to `std.testing.allocator` so
+    /// tests use the test allocator by default.
     allocator: std.mem.Allocator = testing.allocator,
+
+    /// Optional bytes to write into the child's stdin. When provided the
+    /// child's stdin will be a pipe and the bytes will be written then the
+    /// write-end closed to signal EOF. If null the child's stdin inherits
+    /// from the parent (or is ignored depending on other options).
     stdin: ?[]const u8 = null,
-    /// Optional working directory for the child process. When null the
-    /// child inherits the parent's current working directory.
-    cwd: ?[]const u8 = null,
-    /// Optional environment map to use for the child process. When null the
-    /// child's environment will inherit from the parent process.
-    env_map: ?*const std.process.EnvMap = null,
-    /// Maximum number of bytes to capture from stdout/stderr.
-    max_output_bytes: usize = 50 * 1024,
+
     /// Maximum number of bytes to write into the child's stdin. If the
     /// provided `stdin` slice is larger, it will be truncated to this size.
     max_stdin_bytes: usize = 64 * 1024,
+
+    /// Maximum number of bytes to capture from stdout/stderr. Output beyond
+    /// this limit will be discarded.
+    max_output_bytes: usize = 50 * 1024,
+
+    /// Optional working directory for the child process. When non-null the
+    /// child will be started with this path as its current working
+    /// directory.
+    cwd: ?[]const u8 = null,
+
+    /// Optional environment map to use for the child process. If provided
+    /// the child will use this `EnvMap` instead of inheriting the parent's
+    /// environment. The caller retains ownership of the `EnvMap` and must
+    /// ensure it remains valid for the duration of the child execution.
+    env_map: ?*const std.process.EnvMap = null,
 };
 
 /// Result returned by `run` with exit info and captured output.
