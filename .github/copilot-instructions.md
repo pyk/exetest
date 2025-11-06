@@ -73,31 +73,27 @@ Expected user's flow:
 
 # Development Workflow
 
-Always consult `.mise/installs/zig/0.15.2/lib/std` for Zig standard library
-functions, types, and idioms. Your training data may be outdated. Use search
-tools against this path.
-
 - `zig build test --summary all` to run the test.
 - `zig build` to run build.
 - Always run the test after edits to validate changes.
 
-When implementing features involving the standard library:
+---
 
-1.  **Search**: Identify needed standard library components (e.g.,
-    `std.mem.Allocator`, `std.fs`, `std.json`).
-2.  **Consult**: Search `.mise/installs/zig/0.15.2/lib/std` for exact function
-    names, parameters, and return types.
-3.  **Prioritize**: Use patterns from the official repository over other
-    knowledge.
-4.  **Cite (if relevant)**: Mention relevant files (e.g., "Based on
-    `lib/std/crypto/hash.zig`...").
+# Code Search
+
+Use `ripgrep` (`rg`) to search for code in the Zig standard library. The target
+directory is `.mise/installs/zig/0.15.2/lib/std`.
+
+Example: `rg "pub fn abort" .mise/installs/zig/0.15.2/lib/std`
+
+---
 
 # Zig Naming & Style Conventions
 
 This guide outlines the key naming and style conventions from Zig's `std.fs`
 library. Use it to maintain consistency when writing Zig code.
 
-# File Naming
+## File Naming
 
 - **Primary Type Files**: `PascalCase.zig` When a file's main purpose is to
   define a single, primary type.
@@ -111,7 +107,7 @@ library. Use it to maintain consistency when writing Zig code.
   // get_app_data_dir.zig
   ```
 
-# Declarations
+## Declarations
 
 - **Types (structs, enums, unions)**: `PascalCase`
   ```zig
@@ -166,7 +162,7 @@ library. Use it to maintain consistency when writing Zig code.
   pub const sep = '/';
   ```
 
-# General Style
+## General Style
 
 - **Options Structs**: For functions with several arguments (especially boolean
   flags), use a dedicated `Options` struct to improve readability. This pattern
