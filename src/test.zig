@@ -1,10 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
-const exetest = @import("exetest");
+const cmdtest = @import("cmdtest");
 
 test "run: echo" {
     const argv = &[_][]const u8{ "echo", "hello" };
-    var result = try exetest.run(.{ .argv = argv });
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqualStrings("hello\n", result.stdout);
@@ -14,8 +14,8 @@ test "run: echo" {
 }
 
 test "run: no args" {
-    const argv = &[_][]const u8{"exetest"};
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{"cmdtest"};
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqualStrings("OK\n", result.stdout);
@@ -25,8 +25,8 @@ test "run: no args" {
 }
 
 test "run: single arg forwarded" {
-    const argv = &[_][]const u8{ "exetest", "one" };
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{ "cmdtest", "one" };
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqualStrings("one\n", result.stdout);
@@ -36,8 +36,8 @@ test "run: single arg forwarded" {
 }
 
 test "run: multiple args forwarded" {
-    const argv = &[_][]const u8{ "exetest", "a", "b" };
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{ "cmdtest", "a", "b" };
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqualStrings("a\nb\n", result.stdout);
@@ -49,7 +49,7 @@ test "run: multiple args forwarded" {
 test "run: stdin forwarded" {
     const argv = &[_][]const u8{"cat"};
     const stdin_data = "line1\nline2\n";
-    var result = try exetest.run(.{ .argv = argv, .stdin = stdin_data });
+    var result = try cmdtest.run(.{ .argv = argv, .stdin = stdin_data });
     defer result.deinit();
 
     try testing.expectEqualStrings(stdin_data, result.stdout);
@@ -59,8 +59,8 @@ test "run: stdin forwarded" {
 }
 
 test "run: stdout/stderr capture" {
-    const argv = &[_][]const u8{ "exetest", "--stderr", "errdata" };
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{ "cmdtest", "--stderr", "errdata" };
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqualStrings("", result.stdout);
@@ -80,7 +80,7 @@ test "run: stdin truncation" {
     const payload = sbuf[0..total];
 
     const limit: usize = 1024; // 1 KiB
-    var result = try exetest.run(.{
+    var result = try cmdtest.run(.{
         .argv = argv,
         .stdin = payload,
         .max_stdin_bytes = limit,
@@ -95,8 +95,8 @@ test "run: stdin truncation" {
 }
 
 test "run: non-zero exit code" {
-    const argv = &[_][]const u8{ "exetest", "--exit", "42" };
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{ "cmdtest", "--exit", "42" };
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     try testing.expectEqual(@as(u8, 42), result.code);
@@ -104,8 +104,8 @@ test "run: non-zero exit code" {
 }
 
 test "run: terminated by signal" {
-    const argv = &[_][]const u8{ "exetest", "--abort" };
-    var result = try exetest.run(.{ .argv = argv });
+    const argv = &[_][]const u8{ "cmdtest", "--abort" };
+    var result = try cmdtest.run(.{ .argv = argv });
     defer result.deinit();
 
     // Term should indicate a signal (not Exited)
@@ -113,11 +113,11 @@ test "run: terminated by signal" {
 }
 
 test "run: executable not found" {
-    const missing = "exetest-missing-please-12345";
+    const missing = "cmdtest-missing-please-12345";
     const argv = &[_][]const u8{missing};
 
     // We expect an error when attempting to run a non-existent executable.
-    const run_err = exetest.run(.{ .argv = argv });
+    const run_err = cmdtest.run(.{ .argv = argv });
     if (run_err) |r| {
         // Unexpected success: deinit and fail
         var tmp = r;
@@ -141,8 +141,8 @@ test "run: with cwd" {
     const cwd = try std.process.getCwdAlloc(testing.allocator);
     defer testing.allocator.free(cwd);
 
-    const argv = &[_][]const u8{ "exetest", "--print-cwd" };
-    var result = try exetest.run(.{
+    const argv = &[_][]const u8{ "cmdtest", "--print-cwd" };
+    var result = try cmdtest.run(.{
         .argv = argv,
         .cwd = tmp_path,
     });
@@ -162,10 +162,10 @@ test "run: with env_map" {
     var env = std.process.EnvMap.init(testing.allocator);
     defer env.deinit();
 
-    try env.put("EXETEST_VAR", "hello-env");
+    try env.put("cmdtest_VAR", "hello-env");
 
-    const argv = &[_][]const u8{ "exetest", "--getenv", "EXETEST_VAR" };
-    var result = try exetest.run(.{
+    const argv = &[_][]const u8{ "cmdtest", "--getenv", "cmdtest_VAR" };
+    var result = try cmdtest.run(.{
         .argv = argv,
         .env_map = &env,
     });
