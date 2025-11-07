@@ -8,18 +8,18 @@ pub const AddOptions = struct {
     name: []const u8,
     /// Path to the test source file
     test_file: Build.LazyPath,
-    /// The `exetest` build module to import into the test
-    exetest_mod: ?*Build.Module = null,
+    /// The `cmdtest` build module to import into the test
+    cmdtest_mod: ?*Build.Module = null,
 };
 
 /// Register new test
 pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
-    const exetest_mod = if (options.exetest_mod) |mod|
+    const cmdtest_mod = if (options.cmdtest_mod) |mod|
         mod
     else
-        b.dependency("exetest", .{
+        b.dependency("cmdtest", .{
             .target = b.graph.host,
-        }).module("exetest");
+        }).module("cmdtest");
 
     // Create the test module that imports the runtime module
     const test_mod = b.createModule(.{
@@ -27,8 +27,8 @@ pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
         .target = b.graph.host,
         .imports = &.{
             .{
-                .name = "exetest",
-                .module = exetest_mod,
+                .name = "cmdtest",
+                .module = cmdtest_mod,
             },
         },
     });
@@ -59,16 +59,16 @@ pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
 
     ////////////////////////////////////////////////////////////////
-    //                       exetest module                       //
+    //                       cmdtest module                       //
     ////////////////////////////////////////////////////////////////
 
-    const mod = b.addModule("exetest", .{
+    const mod = b.addModule("cmdtest", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
     });
 
     ////////////////////////////////////////////////////////////////
-    //                       exetest tests                        //
+    //                       cmdtest tests                        //
     ////////////////////////////////////////////////////////////////
 
     const unit_tests = b.addTest(.{
@@ -79,7 +79,7 @@ pub fn build(b: *Build) !void {
 
     // Test executables
     const test_exe = b.addExecutable(.{
-        .name = "exetest",
+        .name = "cmdtest",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test_exe.zig"),
             .target = b.graph.host,
@@ -90,7 +90,7 @@ pub fn build(b: *Build) !void {
     const run_integration_tests = add(b, .{
         .name = "integration",
         .test_file = b.path("src/test.zig"),
-        .exetest_mod = mod,
+        .cmdtest_mod = mod,
     });
 
     const test_step = b.step("test", "Run tests");
