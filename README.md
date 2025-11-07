@@ -12,38 +12,58 @@ CLI testing for Zig.
 
    This updates `build.zig.zon`.
 
-2. Write your test file. Example: `test/echo.zig`.
+2. Write your test file. Example: `test/mycli.zig`.
 
    ```zig
-   const std = @import("std");
-   const cmdtest = @import("cmdtest");
-   const testing = std.testing;
+    const std = @import("std");
+    const cmdtest = @import("cmdtest");
+    const testing = std.testing;
 
-   test "echo" {
-     const argv = &[_][]const u8{"echo", "hello"};
-     var result = try cmdtest.run(.{ .argv = argv });
-     defer result.deinit();
+    test "via exe name" {
+        const argv = &[_][]const u8{"mycli"};
+        var result = try cmdtest.run(.{ .argv = argv });
+        defer result.deinit();
 
-     try testing.expectEqualStrings("hello\n", result.stdout);
-   }
+        try testing.expectEqualStrings("project-exe\n", result.stderr);
+    }
+
+    test "via path" {
+        const argv = &[_][]const u8{"./zig-out/bin/mycli"};
+        var result = try cmdtest.run(.{ .argv = argv });
+        defer result.deinit();
+
+        try testing.expectEqualStrings("project-exe\n", result.stderr);
+    }
    ```
 
 3. Register the test in `build.zig`:
 
    ```zig
-   const std = @import("std");
-   const cmdtest = @import("cmdtest");
+    const std = @import("std");
+    const cmdtest = @import("cmdtest");
 
-   pub fn build(b: *std.Build) void {
-     // ...
-     const echo_test = cmdtest.add(b, .{
-       .name = "echo",
-       .test_file = b.path("test/echo.zig"),
-     });
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
 
-     const test_step = b.step("test", "Run tests");
-     test_step.dependOn(&echo_test.step);
-   }
+        // Your CLI
+        const cli = b.addExecutable(.{
+            .name = "mycli",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+            }),
+        });
+        b.installArtifact(cli);
+
+        // Register new test
+        const cli_test = cmdtest.add(b, .{
+            .name = "mycli",
+            .test_file = b.path("test/mycli.zig"),
+        });
+
+        const test_step = b.step("test", "Run tests");
+        test_step.dependOn(&cli_test.step);
+    }
    ```
 
 4. Run the tests:
@@ -72,11 +92,11 @@ const cmdtest = @import("cmdtest");
 const testing = std.testing;
 
 test "echo" {
-  const argv = &[_][]const u8{"echo", "hello"};
-  var result = try cmdtest.run(.{ .argv = argv });
-  defer result.deinit();
+    const argv = &[_][]const u8{"echo", "hello"};
+    var result = try cmdtest.run(.{ .argv = argv });
+    defer result.deinit();
 
-  try testing.expectEqualStrings("hello\n", result.stdout);
+    try testing.expectEqualStrings("hello\n", result.stdout);
 }
 ```
 
@@ -88,12 +108,12 @@ const cmdtest = @import("cmdtest");
 const testing = std.testing;
 
 test "cat" {
-  const argv = &[_][]const u8{"cat"};
-  const input = "a\nb\n";
-  var result = try cmdtest.run(.{ .argv = argv, .stdin = input });
-  defer result.deinit();
+    const argv = &[_][]const u8{"cat"};
+    const input = "a\nb\n";
+    var result = try cmdtest.run(.{ .argv = argv, .stdin = input });
+    defer result.deinit();
 
-  try testing.expectEqualStrings(input, result.stdout);
+    try testing.expectEqualStrings(input, result.stdout);
 }
 ```
 
