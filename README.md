@@ -1,4 +1,4 @@
-### exetest
+### cmdtest
 
 CLI testing for Zig.
 
@@ -7,7 +7,7 @@ CLI testing for Zig.
 1. Fetch the latest release:
 
    ```shell
-   zig fetch --save=exetest https://github.com/pyk/exetest/archive/v0.1.0.tar.gz
+   zig fetch --save=cmdtest https://github.com/pyk/cmdtest/archive/v0.1.0.tar.gz
    ```
 
    This updates `build.zig.zon`.
@@ -16,12 +16,12 @@ CLI testing for Zig.
 
    ```zig
    const std = @import("std");
-   const exetest = @import("exetest");
+   const cmdtest = @import("cmdtest");
    const testing = std.testing;
 
    test "echo" {
      const argv = &[_][]const u8{"echo", "hello"};
-     var result = try exetest.run(.{ .argv = argv });
+     var result = try cmdtest.run(.{ .argv = argv });
      defer result.deinit();
 
      try testing.expectEqualStrings("hello\n", result.stdout);
@@ -32,11 +32,11 @@ CLI testing for Zig.
 
    ```zig
    const std = @import("std");
-   const exetest = @import("exetest");
+   const cmdtest = @import("cmdtest");
 
    pub fn build(b: *std.Build) void {
      // ...
-     const echo_test = exetest.add(b, .{
+     const echo_test = cmdtest.add(b, .{
        .name = "echo",
        .test_file = b.path("test/echo.zig"),
      });
@@ -53,7 +53,7 @@ CLI testing for Zig.
    ```
 
 See minimal Zig project
-[exetest-example](https://github.com/pyk/exetest-example).
+[cmdtest-example](https://github.com/pyk/cmdtest-example).
 
 ### Usage
 
@@ -68,12 +68,12 @@ Basic run and stdout assertion:
 
 ```zig
 const std = @import("std");
-const exetest = @import("exetest");
+const cmdtest = @import("cmdtest");
 const testing = std.testing;
 
 test "echo" {
   const argv = &[_][]const u8{"echo", "hello"};
-  var result = try exetest.run(.{ .argv = argv });
+  var result = try cmdtest.run(.{ .argv = argv });
   defer result.deinit();
 
   try testing.expectEqualStrings("hello\n", result.stdout);
@@ -84,13 +84,13 @@ Write to stdin and capture stdout:
 
 ```zig
 const std = @import("std");
-const exetest = @import("exetest");
+const cmdtest = @import("cmdtest");
 const testing = std.testing;
 
 test "cat" {
   const argv = &[_][]const u8{"cat"};
   const input = "a\nb\n";
-  var result = try exetest.run(.{ .argv = argv, .stdin = input });
+  var result = try cmdtest.run(.{ .argv = argv, .stdin = input });
   defer result.deinit();
 
   try testing.expectEqualStrings(input, result.stdout);
@@ -101,7 +101,7 @@ Limit how many stdin bytes are sent:
 
 ```zig
 const payload = large_slice; // some []const u8
-var result = try exetest.run(.{
+var result = try cmdtest.run(.{
   .argv = argv,
   .stdin = payload,
   .max_stdin_bytes = 1024, // truncate to 1 KiB
