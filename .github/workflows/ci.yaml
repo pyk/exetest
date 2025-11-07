@@ -1,4 +1,4 @@
-name: exetest
+name: cmdtest
 on:
   pull_request:
     branches:
