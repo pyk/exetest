@@ -1,6 +1,9 @@
 const std = @import("std");
 const testing = std.testing;
 const Child = std.process.Child;
+const Writer = std.Io.Writer;
+const Reader = std.Io.Reader;
+const ArrayList = std.ArrayList;
 
 /// Options for `run` controlling I/O, allocator, and output limits.
 pub const RunOptions = struct {
@@ -150,4 +153,86 @@ pub fn run(options: RunOptions) !RunResult {
         .stderr = try stderr_buffer.toOwnedSlice(options.allocator),
         .allocator = options.allocator,
     };
+}
+
+/// Options for `spawn` controlling the child process environment.
+pub const SpawnOptions = struct {
+    argv: []const []const u8,
+    allocator: std.mem.Allocator = testing.allocator,
+    cwd: ?[]const u8 = null,
+    env_map: ?*const std.process.EnvMap = null,
+};
+
+/// Manages a long-running, interactive child process for testing.
+pub const InteractiveProcess = struct {
+    child: Child,
+    stdout_buffer: [1024]u8 = undefined,
+    stdin_buffer: [1024]u8 = undefined,
+    stderr_buffer: [1024]u8 = undefined,
+
+    /// Cleans up resources and ensures the child process is terminated.
+    /// This should always be called, typically with `defer`.
+    pub fn deinit(self: *InteractiveProcess) void {
+        if (self.child.stdin) |stdin_file| {
+            stdin_file.close();
+            self.child.stdin = null;
+        }
+        _ = self.child.wait() catch {};
+    }
+
+    /// Writes bytes to the child process's stdin.
+    pub fn writeToStdin(self: *InteractiveProcess, bytes: []const u8) !void {
+        const stdin_file = self.child.stdin orelse return error.MissingStdin;
+        var stdin_writer = stdin_file.writer(&self.stdin_buffer);
+        var stdin = &stdin_writer.interface;
+        try stdin.writeAll(bytes);
+        try stdin.flush();
+    }
+
+    /// Reads from the child's stdout until a newline is found or the buffer is full.
+    /// The returned slice does not include the newline character.
+    pub fn readLineFromStdout(self: *InteractiveProcess) ![]const u8 {
+        const stdout_file = self.child.stdout orelse return error.MissingStdout;
+        var stdout_reader = stdout_file.reader(&self.stdout_buffer);
+        var stdout = &stdout_reader.interface;
+        const line = try stdout.takeDelimiter('\n') orelse return error.EmptyLine;
+        // Handle potential CR on Windows if the child outputs CRLF
+        const trimmed = std.mem.trimEnd(u8, line, "\r");
+        return trimmed;
+    }
+
+    /// Reads from the child's stderr until a newline is found.
+    pub fn readLineFromStderr(self: *InteractiveProcess) ![]const u8 {
+        const stderr_file = self.child.stderr orelse return error.MissingStderr;
+        var stderr_reader = stderr_file.reader(&self.stderr_buffer);
+        var stderr = &stderr_reader.interface;
+        const line = try stderr.takeDelimiter('\n') orelse return error.EmptyLine;
+        // Handle potential CR on Windows if the child outputs CRLF
+        const trimmed = std.mem.trimEnd(u8, line, "\r");
+        return trimmed;
+    }
+};
+
+/// Spawns an executable for interactive testing.
+///
+/// Returns an `InteractiveProcess` object to manage the child process's
+/// lifecycle and I/O. The caller is responsible for calling `deinit()`
+/// on the returned object to ensure cleanup.
+pub fn spawn(options: SpawnOptions) !InteractiveProcess {
+    var child = Child.init(options.argv, options.allocator);
+    child.cwd = options.cwd;
+    child.env_map = options.env_map;
+
+    // We need pipes for all streams to interact with them
+    child.stdin_behavior = .Pipe;
+    child.stdout_behavior = .Pipe;
+    child.stderr_behavior = .Pipe;
+
+    try child.spawn();
+    errdefer {
+        // If anything fails after spawn, ensure we kill the process
+        _ = child.kill() catch {};
+    }
+
+    return InteractiveProcess{ .child = child };
 }

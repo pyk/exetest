@@ -124,11 +124,7 @@ test "run: executable not found" {
         defer tmp.deinit();
         try testing.expect(false);
     } else |err| {
-        // Got an error as expected. Nothing more to assert (error kinds vary by platform).
-        // Print the error (to reference it) and consider this test successful
-        // because an error was expected.
-        std.debug.print("spawn error: {any}\n", .{err});
-        try testing.expect(true);
+        try testing.expectEqual(error.FileNotFound, err);
     }
 }
 
@@ -172,4 +168,21 @@ test "run: with env_map" {
     defer result.deinit();
 
     try testing.expectEqualStrings("hello-env\n", result.stdout);
+}
+
+test "spawn: interactive mode" {
+    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    try proc.writeToStdin("PING\n");
+    try testing.expectEqualStrings("PONG", try proc.readLineFromStdout());
+
+    try proc.writeToStdin("ECHO works\n");
+    try testing.expectEqualStrings("works", try proc.readLineFromStdout());
+
+    try proc.writeToStdin("EXIT\n");
+
+    const term = try proc.child.wait();
+    try testing.expectEqual(@as(u8, 0), term.Exited);
 }

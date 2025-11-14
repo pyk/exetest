@@ -21,10 +21,15 @@ pub fn main() !void {
     var abort_requested = false;
     var print_cwd = false;
     var getenv_name: ?[]const u8 = null;
+    var interactive = false;
     while (i < args.len) : (i += 1) {
         const s = args[i];
         if (std.mem.eql(u8, s, "--stderr")) {
             use_stderr = true;
+            continue;
+        }
+        if (std.mem.eql(u8, s, "--interactive")) {
+            interactive = true;
             continue;
         }
         if (std.mem.eql(u8, s, "--abort")) {
@@ -68,6 +73,36 @@ pub fn main() !void {
     var buf: [1024]u8 = undefined;
     var writer = if (use_stderr) std.fs.File.stderr().writer(&buf) else std.fs.File.stdout().writer(&buf);
     const io = &writer.interface;
+
+    if (interactive) {
+        var stdin_buffer: [1024]u8 = undefined;
+        var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+        var stdin = &stdin_reader.interface;
+
+        while (stdin.takeDelimiterExclusive('\n')) |line| {
+            const trimmed = std.mem.trimRight(u8, line, "\r");
+            if (std.mem.eql(u8, trimmed, "PING")) {
+                try io.writeAll("PONG\n");
+            } else if (std.mem.startsWith(u8, trimmed, "ECHO ")) {
+                try io.writeAll(trimmed[5..]);
+                try io.writeAll("\n");
+            } else if (std.mem.eql(u8, trimmed, "EXIT")) {
+                break;
+            } else {
+                try io.print("UNKNOWN: {s}\n", .{trimmed});
+            }
+            try io.flush();
+            // NOTE: this is required in order to prevents the program loop forever
+            _ = try stdin.take(1);
+        } else |err| switch (err) {
+            error.EndOfStream => {
+                std.debug.print("END OF STREAM\n", .{});
+            },
+            else => |e| return e,
+        }
+
+        return;
+    }
 
     if (getenv_name) |name| {
         var env_map = std.process.getEnvMap(allocator) catch @panic("fails to get map");
