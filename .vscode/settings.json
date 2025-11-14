@@ -5,5 +5,5 @@
   },
   "zig.path": "${workspaceFolder}/.mise/installs/zig/0.15.2/bin/zig",
   "zig.zls.path": "${workspaceFolder}/.mise/installs/zls/0.15.0/zls",
-  "zig.zls.enableBuildOnSave": true
+  "zig.buildOnSaveProvider": "zls"
 }
