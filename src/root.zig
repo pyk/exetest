@@ -184,15 +184,39 @@ pub const InteractiveProcess = struct {
         _ = self.child.wait() catch {};
     }
 
-    pub const WriteStdinError = error{
-        // This means process already exited
+    pub const WriteError = error{
+        // This means process already exited or child.stdin is closed
         ProcessExited,
         // This means something wrong when writing to stdin
         WriteFailed,
     };
 
+    pub const ReadStdoutError = error{
+        // This means process already exited
+        ProcessExited,
+        // This means something wrong when reading from stdout
+        ReadFailed,
+    };
+
     /// Writes bytes to the child process's stdin.
-    pub fn writeToStdin(self: *Self, bytes: []const u8) WriteStdinError!void {
+    ///
+    /// This method attempts to write all bytes and flush the underlying pipe.
+    /// If the child's stdin is not available (closed or process exited) this
+    /// returns `error.ProcessExited`. Other I/O failures return `error.WriteFailed`.
+    ///
+    /// Notes:
+    /// - Writing to a child's stdin only writes into the OS pipe buffer. It does
+    ///   not guarantee the child will read or consume those bytes. For example,
+    ///   a process that intentionally ignores stdin (or never reads from it) may
+    ///   still make `write` succeed because the bytes are buffered by the OS.
+    /// - Short-lived commands may introduce a timing/race condition: a command
+    ///   might exit quickly around the same time as a write attempt. Depending
+    ///   on timing, `write` may succeed because the write occurred before the
+    ///   kernel noticed the process exit (or due to buffering), or it may return
+    ///   `error.ProcessExited`. As a result, tests asserting a deterministic
+    ///   `error.ProcessExited` for short-lived commands can be flaky and may
+    ///   need to be skipped for reliability.
+    pub fn write(self: *Self, bytes: []const u8) WriteError!void {
         const stdin_file = self.child.stdin orelse return error.ProcessExited;
         var stdin_writer = stdin_file.writer(&self.stdin_buffer);
         var stdin = &stdin_writer.interface;
@@ -202,13 +226,13 @@ pub const InteractiveProcess = struct {
 
     /// Reads from the child's stdout until a newline is found or the buffer is full.
     /// The returned slice does not include the newline character.
-    pub fn readLineFromStdout(self: *Self) ![]const u8 {
-        const stdout_file = self.child.stdout orelse return error.MissingStdout;
+    pub fn readLineFromStdout(self: *Self) ReadStdoutError![]const u8 {
+        const stdout_file = self.child.stdout orelse return error.ProcessExited;
         var stdout_reader = stdout_file.reader(&self.stdout_buffer);
         var stdout = &stdout_reader.interface;
-        const line = try stdout.takeDelimiter('\n') orelse return error.EmptyLine;
+        const line = stdout.takeDelimiter('\n') catch return error.ReadFailed;
         // Handle potential CR on Windows if the child outputs CRLF
-        const trimmed = std.mem.trimEnd(u8, line, "\r");
+        const trimmed = std.mem.trimEnd(u8, line.?, "\r");
         return trimmed;
     }
 

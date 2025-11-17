@@ -176,50 +176,112 @@ test "run: with env_map" {
 //     var proc = try cmdtest.spawn(.{ .argv = argv });
 //     defer proc.deinit();
 
-//     try proc.writeToStdin("PING\n"); // I expect this to be fail as process exit with 42 as code
+//     try proc.write("PING\n"); // I expect this to be fail as process exit with 42 as code
 //     try proc.expectStdout("TEST");
 
-//     try proc.writeToStdin("ECHO works\n");
+//     try proc.write("ECHO works\n");
 //     try testing.expectEqualStrings("works", try proc.readLineFromStdout());
 
-//     try proc.writeToStdin("EXIT\n");
+//     try proc.write("EXIT\n");
 
 //     const term = try proc.child.wait();
 //     try testing.expectEqual(@as(u8, 0), term.Exited);
 // }
 
-test "writeToStdin: running process that accepts stdin" {
+test "write: running process that accepts stdin" {
     const argv = &[_][]const u8{"cat"};
     var proc = try cmdtest.spawn(.{ .argv = argv });
     defer proc.deinit();
 
     // This write should succeed without error.
-    try proc.writeToStdin("data\n");
+    try proc.write("data\n");
     try proc.expectStdout("data");
 }
 
-test "writeToStdin: process confirmed exited" {
+test "write: process confirmed exited" {
     const argv = &[_][]const u8{ "echo", "42" };
     var proc = try cmdtest.spawn(.{ .argv = argv });
     defer proc.deinit();
     _ = try proc.child.wait();
-    try testing.expectError(error.ProcessExited, proc.writeToStdin("data\n"));
+    try testing.expectError(error.ProcessExited, proc.write("data\n"));
 }
 
-test "writeToStdin: running process that ignores stdin" {
+test "write: running process that ignores stdin" {
     const argv = &[_][]const u8{ "sleep", "1" };
     var proc = try cmdtest.spawn(.{ .argv = argv });
     defer proc.deinit();
-    try proc.writeToStdin("this is ignored\n");
+    try proc.write("this is ignored\n");
 }
 
-test "writeToStdin: process died unexpectedly" {
+test "write: process died unexpectedly" {
     // NOTE: skipped for now, this race condition is known issue
     if (builtin.is_test) return error.SkipZigTest;
 
     const argv = &[_][]const u8{"ls"};
     var proc = try cmdtest.spawn(.{ .argv = argv });
     defer proc.deinit();
-    try testing.expectError(error.ProcessExited, proc.writeToStdin("data\n"));
-    // TODO: handle this
+    try testing.expectError(error.ProcessExited, proc.write("data\n"));
 }
+
+test "readLineFromStdout: happy path" {
+    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    try proc.write("PING\n");
+    try testing.expectEqualStrings("PONG", try proc.readLineFromStdout());
+}
+
+test "readLineFromStdout: multiple lines" {
+    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    try proc.write("ECHO line one\n");
+    try testing.expectEqualStrings("line one", try proc.readLineFromStdout());
+
+    try proc.write("ECHO line two\n");
+    try testing.expectEqualStrings("line two", try proc.readLineFromStdout());
+}
+
+test "readLineFromStdout: handles CRLF endings" {
+    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    try proc.write("ECHO line with cr\r\n");
+    try testing.expectEqualStrings("line with cr", try proc.readLineFromStdout());
+}
+
+test "readLineFromStdout: empty line" {
+    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    try proc.write("ECHO \n");
+    try testing.expectEqualStrings("", try proc.readLineFromStdout());
+}
+
+test "readLineFromStdout: process exited before read" {
+    const argv = &[_][]const u8{ "echo", "ok" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+
+    // Wait for the process to fully exit. Its stdout pipe will be closed.
+    _ = try proc.child.wait();
+
+    // Attempting to read from a closed pipe should fail
+    try testing.expectError(error.ProcessExited, proc.readLineFromStdout());
+}
+
+// test "readLineFromStdout: child writes no newline" {
+//     // `printf` is a good tool for writing output without a trailing newline
+//     const argv = &[_][]const u8{ "printf", "no-newline" };
+//     var proc = try cmdtest.spawn(.{ .argv = argv });
+//     defer proc.deinit();
+
+//     // The read will consume "no-newline", hit EOF, and since it never found a
+//     // '\n' delimiter, it will return an error (EndOfStream), which our
+//     // function maps to ReadFailed.
+//     try testing.expectError(error.ReadFailed, proc.readLineFromStdout());
+// }
